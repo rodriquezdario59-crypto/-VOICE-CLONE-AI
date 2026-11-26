@@ -213,15 +213,46 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         } else status.text = "No se pudo iniciar el motor TTS del teléfono."
     }
 
+    private fun applySelectedVoice(): Boolean {
+        val prefs = getSharedPreferences("voiceclone", MODE_PRIVATE)
+        val voiceId = prefs.getString("selected_tts_voice", null)
+        val profileName = prefs.getString("selected_profile_name", "Ninguna seleccionada")
+        if (voiceId.isNullOrBlank()) {
+            status.text = "Selecciona primero una voz en la Biblioteca de voces."
+            toast("Primero selecciona una voz clonada en la biblioteca.")
+            return false
+        }
+        val matchingVoice = tts.voices?.firstOrNull { it.name == voiceId }
+        if (matchingVoice == null) {
+            status.text = "No se encontró en Pocket TTS la voz vinculada a $profileName. Vuelve a Vincularla."
+            toast("La voz seleccionada ya no está disponible en el motor. Pulsa Vincular y elige su voz otra vez.")
+            return false
+        }
+        val result = runCatching { tts.voice = matchingVoice }.isSuccess
+        if (!result) {
+            status.text = "No se pudo activar $profileName."
+            toast("El motor no pudo activar esa voz. Prueba a vincularla de nuevo.")
+            return false
+        }
+        selectedVoiceSummary.text = "Voz activa: $profileName"
+        return true
+    }
+
     private fun speakText() {
         val text = textInput.text.toString().trim()
         if (text.isEmpty()) return toast("Escribe primero el texto.")
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "voiceclone-preview")
+        if (!applySelectedVoice()) return
+        val result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "voiceclone-preview")
+        if (result == TextToSpeech.ERROR) {
+            status.text = "El motor rechazó la generación con la voz seleccionada."
+            toast("No se pudo generar con esa voz. Comprueba que esté cargada en Pocket TTS.")
+        }
     }
 
     private fun saveWav() {
         val text = textInput.text.toString().trim()
         if (text.isEmpty()) return toast("Escribe primero el texto.")
+        if (!applySelectedVoice()) return
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "audio/wav"
