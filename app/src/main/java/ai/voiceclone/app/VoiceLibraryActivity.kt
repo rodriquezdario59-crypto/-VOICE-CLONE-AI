@@ -97,6 +97,7 @@ class VoiceLibraryActivity : Activity() {
         content.addView(status)
         content.addView(space(12))
         content.addView(action("＋  Importar audio WAV / MP3", true) { openPicker() })
+        content.addView(action("Abrir Pocket TTS para registrar la referencia", false) { openPocketTts() })
         content.addView(action("Actualizar voces disponibles", false) { refreshEngineVoices() })
         content.addView(action("Exportar biblioteca para otro celular", false) { openExportPicker() })
         content.addView(action("Importar biblioteca desde ZIP", false) { openImportPicker() })
