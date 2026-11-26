@@ -12,6 +12,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -83,6 +84,11 @@ class VoiceLibraryActivity : Activity() {
         }
         val scroll = ScrollView(this)
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val brandIcon = ImageView(this).apply {
+            setImageResource(R.drawable.ic_voice_clone)
+            layoutParams = LinearLayout.LayoutParams(76, 76).apply { gravity = Gravity.CENTER_HORIZONTAL }
+        }
+        content.addView(brandIcon)
         content.addView(text("VOICE CLONE AI", 13, 0xFF79C5FF.toInt(), true))
         content.addView(text("Biblioteca de voces", 27, 0xFFF4F7FC.toInt(), true))
         content.addView(text("Guarda, organiza y selecciona tus referencias de voz.", 14, 0xFF9DAEC2.toInt()))
