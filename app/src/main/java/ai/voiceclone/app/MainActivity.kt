@@ -45,10 +45,15 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var pendingWavUri: Uri? = null
     private var pendingWavTemp: File? = null
     private val maxCharacters = 3000
+    private val pocketEnginePackage = "org.pockettts.android.engine"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        tts = TextToSpeech(this, this)
+        val engineInstalled = try {
+            packageManager.getApplicationInfo(pocketEnginePackage, 0)
+            true
+        } catch (_: Exception) { false }
+        tts = if (engineInstalled) TextToSpeech(this, this, pocketEnginePackage) else TextToSpeech(this, this)
         buildScreen()
     }
 
@@ -83,6 +88,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         content.addView(space(8))
         content.addView(label("La clonación neuronal se conectará después de validar el modelo local.", 12, 0xFFAAA5B1.toInt()))
         content.addView(space(16))
+        content.addView(actionButton("Abrir biblioteca de voces") {
+            startActivity(Intent(this, VoiceLibraryActivity::class.java))
+        })
         content.addView(actionButton("Importar muestra de voz") { importAudio() })
         content.addView(actionButton("Grabar muestra con micrófono") { startRecording() })
         content.addView(actionButton("Detener grabación") { stopRecording() })
@@ -118,10 +126,18 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     override fun onInit(result: Int) {
         if (result == TextToSpeech.SUCCESS) {
             val languageResult = tts.setLanguage(Locale("es", "ES"))
+            val savedVoiceId = getSharedPreferences("voiceclone", MODE_PRIVATE)
+                .getString("selected_tts_voice", null)
+            val savedVoice = tts.voices?.firstOrNull { it.name == savedVoiceId }
+            if (savedVoice != null) runCatching { tts.voice = savedVoice }
             status.text = if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
                 languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
                 "Instala una voz española compatible para uso sin conexión en los ajustes del sistema."
-            } else "Voz local del sistema lista. Este motor todavía no clona voces."
+            } else if (tts.defaultEngine == pocketEnginePackage) {
+                "Pocket TTS conectado. Usa la biblioteca para elegir una voz clonada."
+            } else {
+                "Motor local del teléfono listo. Instala Pocket TTS para usar voces clonadas."
+            }
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String) { runOnUiThread { status.text = "Generando audio local…" } }
                 override fun onDone(utteranceId: String) {
