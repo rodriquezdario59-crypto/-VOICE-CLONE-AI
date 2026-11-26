@@ -233,11 +233,12 @@ class VoiceLibraryActivity : Activity() {
             toast("No hay voces del motor disponibles. Comprueba que Pocket TTS esté instalado y tenga un modelo cargado.")
             return
         }
-        val labels = engineVoices.map { voice ->
-            "${voice.name}  •  ${voice.locale.displayName}"
+        val labels = engineVoices.mapIndexed { index, voice ->
+            "${index + 1}. ${profile.name}  →  ${voice.name}  •  ${voice.locale.displayName}"
         }.toTypedArray()
         AlertDialog.Builder(this)
-            .setTitle("Vincular voz para ${profile.name}")
+            .setTitle("Vincular referencia: ${profile.name}")
+            .setMessage("El nombre del audio se conserva como nombre del perfil. Selecciona el identificador que Pocket TTS expone para esta referencia:")
             .setItems(labels) { _, which ->
                 profile.engineVoiceId = engineVoices[which].name
                 saveProfiles()
@@ -314,7 +315,7 @@ class VoiceLibraryActivity : Activity() {
             }
             card.addView(text(profile.name, 17, 0xFFF1F6FC.toInt(), true))
             val linked = profile.engineVoiceId.isNotBlank()
-            card.addView(text(if (linked) "Motor: ${profile.engineVoiceId}" else "Pendiente de vincular con Pocket TTS", 11, if (linked) 0xFF78D6B0.toInt() else 0xFFF0C27A.toInt()))
+            card.addView(text(if (linked) "Nombre guardado: ${profile.name}\nVoz del motor: ${profile.engineVoiceId}" else "Nombre guardado: ${profile.name}\nPendiente de vincular con Pocket TTS", 11, if (linked) 0xFF78D6B0.toInt() else 0xFFF0C27A.toInt()))
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
