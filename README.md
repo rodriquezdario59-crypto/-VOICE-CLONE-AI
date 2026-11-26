@@ -5,7 +5,8 @@ Aplicación Android nativa, con interfaz oscura y prioridad de funcionamiento si
 ## Versión 0.2.0 — Biblioteca de voces y conexión con Pocket TTS
 
 - Interfaz con tema azul noche y acentos azules.
-- Biblioteca local de referencias WAV/MP3 con nombre, reproducción previa y eliminación.
+- Biblioteca local de referencias WAV/MP3 con nombre, reproducción previa, selección y eliminación.
+- Exportación e importación de la biblioteca mediante un ZIP para trasladarla a otro teléfono.
 - Vinculación de perfiles con las voces que expone el motor Android TTS.
 - La aplicación intenta utilizar directamente Pocket TTS Android Engine (`org.pockettts.android.engine`) cuando está instalado.
 - Conserva la importación y grabación WAV del estudio principal.
