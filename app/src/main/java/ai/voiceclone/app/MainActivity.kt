@@ -31,6 +31,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private val requestRecordAudio = 410
     private val requestImportAudio = 411
     private val requestSaveWav = 412
+    private val requestExportSample = 413
     private var pendingWavUri: Uri? = null
     private var pendingWavTemp: File? = null
     private val maxCharacters = 3000
@@ -75,6 +76,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         content.addView(actionButton("Importar muestra de voz") { importAudio() })
         content.addView(actionButton("Grabar muestra con micrófono") { startRecording() })
         content.addView(actionButton("Detener grabación") { stopRecording() })
+        content.addView(actionButton("Exportar última muestra grabada") { exportLatestSample() })
         content.addView(actionButton("Leer texto con voz local del teléfono") { speakText() })
         content.addView(actionButton("Guardar audio WAV") { saveWav() })
         content.addView(actionButton("Detener reproducción") { tts.stop() })
@@ -162,6 +164,24 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         startActivityForResult(intent, requestSaveWav)
     }
 
+
+    private var pendingSampleExport: File? = null
+
+    private fun exportLatestSample() {
+        val dir = File(filesDir, "voice_samples")
+        val sample = dir.listFiles()
+            ?.filter { it.isFile && it.extension.lowercase() == "m4a" }
+            ?.maxByOrNull { it.lastModified() }
+        if (sample == null || !sample.exists()) return toast("No se encontró una grabación M4A.")
+        pendingSampleExport = sample
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "audio/mp4"
+            putExtra(Intent.EXTRA_TITLE, "mi_muestra_de_voz.m4a")
+        }
+        startActivityForResult(intent, requestExportSample)
+    }
+
     private fun importAudio() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -195,6 +215,25 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 pendingWavUri = null
                 pendingWavTemp = null
                 toast("No se pudo preparar el WAV: " + e.message)
+            }
+        }
+
+        if (requestCode == requestExportSample && resultCode == RESULT_OK) {
+            val uri = data?.data
+            val sample = pendingSampleExport
+            try {
+                if (uri == null || sample == null || !sample.exists()) {
+                    throw IllegalStateException("No se encontró la grabación.")
+                }
+                contentResolver.openOutputStream(uri, "w")!!.use { output ->
+                    sample.inputStream().use { input -> input.copyTo(output) }
+                }
+                status.text = "Muestra M4A exportada correctamente."
+                toast("Muestra exportada correctamente.")
+            } catch (e: Exception) {
+                toast("No se pudo exportar la muestra: " + e.message)
+            } finally {
+                pendingSampleExport = null
             }
         }
         if (requestCode == requestImportAudio && resultCode == RESULT_OK) {
