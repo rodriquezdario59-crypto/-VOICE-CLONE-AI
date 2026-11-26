@@ -18,6 +18,9 @@ import android.widget.TextView
 import android.widget.Toast
 import java.io.File
 import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -32,6 +35,8 @@ class VoiceLibraryActivity : Activity() {
     private val pocketEnginePackage = "org.pockettts.android.engine"
     private var usingPocketEngine = false
     private val pickerCode = 721
+    private val exportCode = 722
+    private val importCode = 723
     private val profiles = mutableListOf<Profile>()
     private var engineVoices: List<Voice> = emptyList()
     private var tts: TextToSpeech? = null
@@ -87,6 +92,8 @@ class VoiceLibraryActivity : Activity() {
         content.addView(space(12))
         content.addView(action("＋  Importar audio WAV / MP3", true) { openPicker() })
         content.addView(action("Actualizar voces disponibles", false) { refreshEngineVoices() })
+        content.addView(action("Exportar biblioteca para otro celular", false) { openExportPicker() })
+        content.addView(action("Importar biblioteca desde ZIP", false) { openImportPicker() })
         content.addView(space(14))
         content.addView(text("MIS VOCES", 12, 0xFF91A6BE.toInt(), true))
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -132,8 +139,11 @@ class VoiceLibraryActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != pickerCode || resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return toast("No se recibió el archivo.")
+        if (requestCode == exportCode) { exportLibrary(uri); return }
+        if (requestCode == importCode) { importLibrary(uri); return }
+        if (requestCode != pickerCode) return
         try {
             val dir = File(filesDir, "voice_library").apply { mkdirs() }
             val file = File(dir, "reference_${System.currentTimeMillis()}.${extensionFor(uri)}")
@@ -281,6 +291,109 @@ class VoiceLibraryActivity : Activity() {
             card.addView(row)
             card.addView(action("Eliminar referencia", false) { delete(profile) })
             list.addView(card)
+        }
+    }
+
+
+    private fun openExportPicker() {
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/zip"
+            putExtra(Intent.EXTRA_TITLE, "VOICE-CLONE-AI-voces.zip")
+        }
+        startActivityForResult(intent, exportCode)
+    }
+
+    private fun openImportPicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/zip"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivityForResult(intent, importCode)
+    }
+
+    private fun exportLibrary(uri: Uri) {
+        try {
+            contentResolver.openOutputStream(uri)?.use { raw ->
+                ZipOutputStream(raw).use { zip ->
+                    val metadata = JSONArray()
+                    profiles.forEach { profile ->
+                        val file = File(profile.audioPath)
+                        if (file.exists()) {
+                            metadata.put(JSONObject().apply {
+                                put("id", profile.id)
+                                put("name", profile.name)
+                                put("fileName", file.name)
+                                put("engineVoiceId", profile.engineVoiceId)
+                            })
+                        }
+                    }
+                    zip.putNextEntry(ZipEntry("profiles.json"))
+                    zip.write(metadata.toString().toByteArray(Charsets.UTF_8))
+                    zip.closeEntry()
+                    profiles.forEach { profile ->
+                        val file = File(profile.audioPath)
+                        if (file.exists()) {
+                            zip.putNextEntry(ZipEntry("audio/\${file.name}"))
+                            file.inputStream().use { it.copyTo(zip) }
+                            zip.closeEntry()
+                        }
+                    }
+                }
+            } ?: throw IllegalStateException("Android no permitió guardar el ZIP.")
+            toast("Biblioteca exportada. Transfiere el ZIP al otro teléfono.")
+        } catch (e: Exception) {
+            toast("No se pudo exportar la biblioteca: \${e.message}")
+        }
+    }
+
+    private fun importLibrary(uri: Uri) {
+        try {
+            val dir = File(filesDir, "voice_library").apply { mkdirs() }
+            val importedFiles = mutableMapOf<String, File>()
+            var metadataText: String? = null
+            contentResolver.openInputStream(uri)?.use { raw ->
+                ZipInputStream(raw).use { zip ->
+                    var entry = zip.nextEntry
+                    while (entry != null) {
+                        if (!entry.isDirectory && entry.name == "profiles.json") {
+                            metadataText = zip.readBytes().toString(Charsets.UTF_8)
+                        } else if (!entry.isDirectory && entry.name.startsWith("audio/")) {
+                            val originalName = entry.name.substringAfter("audio/")
+                            val safeName = originalName.substringAfterLast("/")
+                                .replace(Regex("[^A-Za-z0-9._-]"), "_")
+                            if (safeName.isNotBlank() && !safeName.contains("..")) {
+                                val target = File(dir, "imported_\${System.currentTimeMillis()}_\${safeName}")
+                                target.outputStream().use { output -> zip.copyTo(output) }
+                                importedFiles[originalName] = target
+                            }
+                        }
+                        zip.closeEntry()
+                        entry = zip.nextEntry
+                    }
+                }
+            } ?: throw IllegalStateException("No se pudo abrir el ZIP.")
+            val rawMetadata = metadataText ?: throw IllegalStateException("El ZIP no contiene perfiles de voz.")
+            val metadata = JSONArray(rawMetadata)
+            var added = 0
+            for (i in 0 until metadata.length()) {
+                val item = metadata.getJSONObject(i)
+                val originalName = item.optString("fileName")
+                val file = importedFiles[originalName] ?: continue
+                profiles.add(Profile(
+                    "\${System.currentTimeMillis()}_\${i}",
+                    item.optString("name", "Voz importada"),
+                    file.absolutePath,
+                    item.optString("engineVoiceId", "")
+                ))
+                added++
+            }
+            saveProfiles()
+            renderProfiles()
+            toast("Se importaron \${added} voces. En este teléfono también debes importar las referencias en Pocket TTS y volver a vincularlas si sus identificadores son distintos.")
+        } catch (e: Exception) {
+            toast("No se pudo importar la biblioteca: \${e.message}")
         }
     }
 
