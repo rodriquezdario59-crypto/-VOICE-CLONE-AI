@@ -335,7 +335,7 @@ class VoiceLibraryActivity : Activity() {
                     profiles.forEach { profile ->
                         val file = File(profile.audioPath)
                         if (file.exists()) {
-                            zip.putNextEntry(ZipEntry("audio/\${file.name}"))
+                            zip.putNextEntry(ZipEntry("audio/${file.name}"))
                             file.inputStream().use { it.copyTo(zip) }
                             zip.closeEntry()
                         }
@@ -344,7 +344,7 @@ class VoiceLibraryActivity : Activity() {
             } ?: throw IllegalStateException("Android no permitió guardar el ZIP.")
             toast("Biblioteca exportada. Transfiere el ZIP al otro teléfono.")
         } catch (e: Exception) {
-            toast("No se pudo exportar la biblioteca: \${e.message}")
+            toast("No se pudo exportar la biblioteca: ${e.message}")
         }
     }
 
@@ -364,7 +364,7 @@ class VoiceLibraryActivity : Activity() {
                             val safeName = originalName.substringAfterLast("/")
                                 .replace(Regex("[^A-Za-z0-9._-]"), "_")
                             if (safeName.isNotBlank() && !safeName.contains("..")) {
-                                val target = File(dir, "imported_\${System.currentTimeMillis()}_\${safeName}")
+                                val target = File(dir, "imported_${System.currentTimeMillis()}_${safeName}")
                                 target.outputStream().use { output -> zip.copyTo(output) }
                                 importedFiles[originalName] = target
                             }
@@ -382,7 +382,7 @@ class VoiceLibraryActivity : Activity() {
                 val originalName = item.optString("fileName")
                 val file = importedFiles[originalName] ?: continue
                 profiles.add(Profile(
-                    "\${System.currentTimeMillis()}_\${i}",
+                    "${System.currentTimeMillis()}_${i}",
                     item.optString("name", "Voz importada"),
                     file.absolutePath,
                     item.optString("engineVoiceId", "")
@@ -391,9 +391,9 @@ class VoiceLibraryActivity : Activity() {
             }
             saveProfiles()
             renderProfiles()
-            toast("Se importaron \${added} voces. En este teléfono también debes importar las referencias en Pocket TTS y volver a vincularlas si sus identificadores son distintos.")
+            toast("Se importaron ${added} voces. En este teléfono también debes importar las referencias en Pocket TTS y volver a vincularlas si sus identificadores son distintos.")
         } catch (e: Exception) {
-            toast("No se pudo importar la biblioteca: \${e.message}")
+            toast("No se pudo importar la biblioteca: ${e.message}")
         }
     }
 
