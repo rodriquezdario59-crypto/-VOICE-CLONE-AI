@@ -2,6 +2,7 @@ package ai.voiceclone.app
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.graphics.drawable.GradientDrawable
 import android.content.Intent
 import android.media.MediaPlayer
 import android.net.Uri
@@ -129,7 +130,12 @@ class VoiceLibraryActivity : Activity() {
         isAllCaps = false
         textSize = 14f
         setTextColor(if (primary) 0xFFFFFFFF.toInt() else 0xFFBBDFFF.toInt())
-        setBackgroundColor(if (primary) 0xFF1769A6.toInt() else 0xFF1A2A3D.toInt())
+        background = GradientDrawable().apply {
+            setColor(if (primary) 0xFF1769A6.toInt() else 0xFF1A2A3D.toInt())
+            cornerRadius = 18f
+        }
+        minHeight = 48
+        setPadding(10, 8, 10, 8)
         setOnClickListener { click() }
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 }
     }
