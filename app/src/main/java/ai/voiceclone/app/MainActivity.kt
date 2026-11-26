@@ -175,17 +175,27 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun exportLatestSample() {
         val dir = File(filesDir, "voice_samples")
-        val sample = dir.listFiles()
-            ?.filter { it.isFile && it.extension.lowercase() == "m4a" }
-            ?.maxByOrNull { it.lastModified() }
+        val sample = selectedSampleFile?.takeIf { it.exists() && it.extension.lowercase() == "m4a" }
+            ?: dir.listFiles()
+                ?.filter { it.isFile && it.extension.lowercase() == "m4a" }
+                ?.maxByOrNull { it.lastModified() }
         if (sample == null || !sample.exists()) return toast("No se encontró una grabación M4A.")
+        openSampleSavePicker(sample)
+    }
+
+    private fun openSampleSavePicker(sample: File) {
         pendingSampleExport = sample
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "audio/mp4"
-            putExtra(Intent.EXTRA_TITLE, "mi_muestra_de_voz.m4a")
+            putExtra(Intent.EXTRA_TITLE, sample.name)
         }
-        startActivityForResult(intent, requestExportSample)
+        try {
+            startActivityForResult(intent, requestExportSample)
+        } catch (e: Exception) {
+            pendingSampleExport = null
+            toast("No se pudo abrir la selección de carpeta: " + e.message)
+        }
     }
 
     private fun importAudio() {
@@ -356,13 +366,28 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun stopRecording() {
         val active = recorder ?: return toast("No hay grabación activa.")
+        var completedSample: File? = null
         try {
             active.stop()
             sampleCount++
             selectedSampleFile = recordingFile
-            status.text = "Grabación guardada en la carpeta interna voice_samples. Pulsa «Importar muestra de voz» para seleccionarla."
-        } catch (_: Exception) { toast("La grabación fue demasiado corta o falló.") }
-        finally { active.release(); recorder = null }
+            completedSample = recordingFile
+            status.text = "Grabación guardada internamente. Elige dónde quieres guardar una copia."
+            toast("Grabación terminada. Ahora puedes elegir la carpeta donde guardar una copia.")
+        } catch (_: Exception) {
+            toast("La grabación fue demasiado corta o falló.")
+        } finally {
+            active.release()
+            recorder = null
+        }
+        completedSample?.let { sample ->
+            AlertDialog.Builder(this)
+                .setTitle("Guardar grabación")
+                .setMessage("La grabación ya está guardada dentro de la aplicación. ¿En qué carpeta quieres guardar una copia?")
+                .setPositiveButton("Elegir carpeta") { _, _ -> openSampleSavePicker(sample) }
+                .setNegativeButton("Ahora no", null)
+                .show()
+        }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
