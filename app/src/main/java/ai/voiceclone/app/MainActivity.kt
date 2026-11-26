@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
@@ -29,6 +30,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var sampleCount = 0
     private val requestRecordAudio = 410
     private val requestImportAudio = 411
+    private val requestSaveWav = 412
+    private var pendingWavUri: Uri? = null
+    private var pendingWavTemp: File? = null
     private val maxCharacters = 3000
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,9 +109,38 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             } else "Voz local del sistema lista. Este motor todavía no clona voces."
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String) { runOnUiThread { status.text = "Generando audio local…" } }
-                override fun onDone(utteranceId: String) { runOnUiThread { status.text = "Audio terminado." } }
+                override fun onDone(utteranceId: String) {
+                    if (utteranceId == "voiceclone-wav") {
+                        val uri = pendingWavUri
+                        val temp = pendingWavTemp
+                        try {
+                            if (uri == null || temp == null || !temp.exists() || temp.length() == 0L) {
+                                throw IllegalStateException("El motor no produjo un archivo WAV.")
+                            }
+                            contentResolver.openOutputStream(uri, "w")!!.use { output ->
+                                temp.inputStream().use { input -> input.copyTo(output) }
+                            }
+                            runOnUiThread { status.text = "Audio WAV guardado correctamente."; toast("WAV guardado correctamente.") }
+                        } catch (e: Exception) {
+                            runOnUiThread { status.text = "No se pudo guardar el WAV."; toast("Error al guardar el WAV: " + e.message) }
+                        } finally {
+                            temp?.delete()
+                            pendingWavUri = null
+                            pendingWavTemp = null
+                        }
+                    } else {
+                        runOnUiThread { status.text = "Audio terminado." }
+                    }
+                }
                 @Deprecated("Deprecated in Java")
-                override fun onError(utteranceId: String) { runOnUiThread { status.text = "No se pudo generar el audio." } }
+                override fun onError(utteranceId: String) {
+                    if (utteranceId == "voiceclone-wav") {
+                        pendingWavTemp?.delete()
+                        pendingWavTemp = null
+                        pendingWavUri = null
+                    }
+                    runOnUiThread { status.text = "No se pudo generar el audio."; toast("No se pudo generar el audio.") }
+                }
             })
         } else status.text = "No se pudo iniciar el motor TTS del teléfono."
     }
@@ -121,12 +154,12 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun saveWav() {
         val text = textInput.text.toString().trim()
         if (text.isEmpty()) return toast("Escribe primero el texto.")
-        val dir = getExternalFilesDir("VoiceCloneAI") ?: filesDir
-        if (!dir.exists()) dir.mkdirs()
-        val output = File(dir, "voice_${System.currentTimeMillis()}.wav")
-        val result = tts.synthesizeToFile(text, Bundle(), output, "voiceclone-wav")
-        if (result == TextToSpeech.SUCCESS) status.text = "Solicitada la creación de WAV en el almacenamiento de la app."
-        else toast("El motor de voz no pudo crear el WAV.")
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "audio/wav"
+            putExtra(Intent.EXTRA_TITLE, "voiceclone_${System.currentTimeMillis()}.wav")
+        }
+        startActivityForResult(intent, requestSaveWav)
     }
 
     private fun importAudio() {
@@ -140,6 +173,30 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == requestSaveWav && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            val text = textInput.text.toString().trim()
+            if (text.isEmpty()) return toast("Escribe primero el texto.")
+            try {
+                val temp = File(cacheDir, "voiceclone_${System.currentTimeMillis()}.wav")
+                pendingWavUri = uri
+                pendingWavTemp = temp
+                status.text = "Generando WAV… espera sin cerrar la aplicación."
+                val result = tts.synthesizeToFile(text, Bundle(), temp, "voiceclone-wav")
+                if (result != TextToSpeech.SUCCESS) {
+                    temp.delete()
+                    pendingWavUri = null
+                    pendingWavTemp = null
+                    status.text = "El motor no pudo iniciar la creación del WAV."
+                    toast("El motor de voz no pudo crear el WAV.")
+                }
+            } catch (e: Exception) {
+                pendingWavTemp?.delete()
+                pendingWavUri = null
+                pendingWavTemp = null
+                toast("No se pudo preparar el WAV: " + e.message)
+            }
+        }
         if (requestCode == requestImportAudio && resultCode == RESULT_OK) {
             val uri = data?.data ?: return
             try {
