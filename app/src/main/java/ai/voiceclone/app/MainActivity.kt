@@ -23,6 +23,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
@@ -101,6 +102,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             filters = arrayOf(android.text.InputFilter.LengthFilter(maxCharacters))
         }
         content.addView(textInput, matchWidth())
+        content.addView(space(14))
+        content.addView(label("AJUSTES DE VOZ", 13, 0xFFBDB8C8.toInt()))
+        content.addView(adjustmentControl("Velocidad", "speech_rate", 50, 200, 100))
+        content.addView(adjustmentControl("Tono", "speech_pitch", 50, 150, 100))
+        content.addView(label("Los ajustes se aplican al generar o guardar audio; el efecto depende de las funciones del motor.", 11, 0xFFAAA5B1.toInt()))
         content.addView(space(8))
         content.addView(label("Pocket TTS funciona como motor local cuando está instalado.", 12, 0xFFAAA5B1.toInt()))
         content.addView(space(16))
@@ -132,6 +138,33 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
     private fun space(height: Int) = View(this).apply { layoutParams = LinearLayout.LayoutParams(1, height) }
     private fun matchWidth() = LinearLayout.LayoutParams(-1, -2)
+
+    private fun adjustmentControl(title: String, key: String, min: Int, max: Int, defaultValue: Int): View {
+        val prefs = getSharedPreferences("voiceclone", MODE_PRIVATE)
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val titleView = TextView(this).apply { text = title; textSize = 13f; setTextColor(0xFFEAF5FF.toInt()); layoutParams = LinearLayout.LayoutParams(78, -2) }
+        lateinit var bar: SeekBar
+        val value = TextView(this).apply { textSize = 12f; setTextColor(0xFF78D6B0.toInt()); gravity = Gravity.END; layoutParams = LinearLayout.LayoutParams(42, -2) }
+        val minus = Button(this).apply { text = "−"; isAllCaps = false; minWidth = 40; setOnClickListener { bar.progress = (bar.progress - 5).coerceAtLeast(0) } }
+        bar = SeekBar(this).apply { max = max - min; progress = prefs.getInt(key, defaultValue).coerceIn(min, max) - min; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
+        val plus = Button(this).apply { text = "+"; isAllCaps = false; minWidth = 40; setOnClickListener { bar.progress = (bar.progress + 5).coerceAtMost(bar.max) } }
+        fun update() { val amount = bar.progress + min; value.text = amount.toString() + "%"; prefs.edit().putInt(key, amount).apply(); applyVoiceParameters() }
+        bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) { update() }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+        row.addView(titleView); row.addView(minus); row.addView(bar); row.addView(plus); row.addView(value)
+        update()
+        return row
+    }
+
+    private fun applyVoiceParameters() {
+        if (!::tts.isInitialized) return
+        val prefs = getSharedPreferences("voiceclone", MODE_PRIVATE)
+        runCatching { tts.setSpeechRate(prefs.getInt("speech_rate", 100).coerceIn(50, 200) / 100f) }
+        runCatching { tts.setPitch(prefs.getInt("speech_pitch", 100).coerceIn(50, 150) / 100f) }
+    }
     private fun actionButton(title: String, action: () -> Unit) = Button(this).apply {
         text = title
         isAllCaps = false
@@ -167,6 +200,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 .getString("selected_tts_voice", null)
             val savedVoice = tts.voices?.firstOrNull { it.name == savedVoiceId }
             if (savedVoice != null) runCatching { tts.voice = savedVoice }
+            applyVoiceParameters()
             status.text = if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
                 languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
                 "Instala una voz española compatible para uso sin conexión en los ajustes del sistema."
@@ -235,6 +269,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             return false
         }
         selectedVoiceSummary.text = "Voz activa: $profileName"
+        applyVoiceParameters()
         return true
     }
 
