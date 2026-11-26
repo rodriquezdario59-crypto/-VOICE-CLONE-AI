@@ -46,6 +46,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var pendingWavTemp: File? = null
     private val maxCharacters = 3000
     private val pocketEnginePackage = "org.pockettts.android.engine"
+    private var usingPocketEngine = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +54,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             packageManager.getApplicationInfo(pocketEnginePackage, 0)
             true
         } catch (_: Exception) { false }
+        usingPocketEngine = engineInstalled
         tts = if (engineInstalled) TextToSpeech(this, this, pocketEnginePackage) else TextToSpeech(this, this)
         buildScreen()
     }
@@ -86,7 +88,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         content.addView(textInput, matchWidth())
         content.addView(space(8))
-        content.addView(label("La clonación neuronal se conectará después de validar el modelo local.", 12, 0xFFAAA5B1.toInt()))
+        content.addView(label("Pocket TTS funciona como motor local cuando está instalado.", 12, 0xFFAAA5B1.toInt()))
         content.addView(space(16))
         content.addView(actionButton("Abrir biblioteca de voces") {
             startActivity(Intent(this, VoiceLibraryActivity::class.java))
@@ -133,7 +135,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             status.text = if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
                 languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
                 "Instala una voz española compatible para uso sin conexión en los ajustes del sistema."
-            } else if (tts.defaultEngine == pocketEnginePackage) {
+            } else if (usingPocketEngine) {
                 "Pocket TTS conectado. Usa la biblioteca para elegir una voz clonada."
             } else {
                 "Motor local del teléfono listo. Instala Pocket TTS para usar voces clonadas."
