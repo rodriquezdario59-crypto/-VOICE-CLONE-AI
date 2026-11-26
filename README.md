@@ -2,7 +2,7 @@
 
 Aplicación Android nativa, con interfaz oscura y prioridad de funcionamiento sin conexión. Diseñada inicialmente para ARM64 y Android 12 o superior.
 
-## Versión 0.2.0 — Biblioteca de voces y conexión con Pocket TTS
+## Versión 0.3.0 — Biblioteca de voces, Pocket TTS y transferencia ZIP
 
 - Interfaz con tema azul noche y acentos azules.
 - Biblioteca local de referencias WAV/MP3 con nombre, reproducción previa, selección y eliminación.
