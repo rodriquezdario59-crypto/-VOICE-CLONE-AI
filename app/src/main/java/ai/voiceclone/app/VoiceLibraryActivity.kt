@@ -30,6 +30,7 @@ class VoiceLibraryActivity : Activity() {
     )
 
     private val pocketEnginePackage = "org.pockettts.android.engine"
+    private var usingPocketEngine = false
     private val pickerCode = 721
     private val profiles = mutableListOf<Profile>()
     private var engineVoices: List<Voice> = emptyList()
@@ -46,6 +47,7 @@ class VoiceLibraryActivity : Activity() {
             packageManager.getApplicationInfo(pocketEnginePackage, 0)
             true
         } catch (_: Exception) { false }
+        usingPocketEngine = installed
         tts = if (installed) {
             TextToSpeech(this, { result -> onEngineReady(result) }, pocketEnginePackage)
         } else {
@@ -57,7 +59,7 @@ class VoiceLibraryActivity : Activity() {
     private fun onEngineReady(result: Int) {
         if (result == TextToSpeech.SUCCESS) {
             engineVoices = tts?.voices?.toList()?.sortedBy { it.name } ?: emptyList()
-            status.text = if (tts?.defaultEngine == pocketEnginePackage) {
+            status.text = if (usingPocketEngine) {
                 "Pocket TTS conectado • ${engineVoices.size} voces disponibles"
             } else {
                 "Pocket TTS no está instalado • se muestra el motor disponible del teléfono"
