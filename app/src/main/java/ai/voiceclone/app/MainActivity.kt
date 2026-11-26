@@ -33,6 +33,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private lateinit var status: TextView
     private lateinit var textInput: EditText
     private lateinit var samplesSummary: TextView
+    private lateinit var selectedVoiceSummary: TextView
     private var recorder: AudioRecord? = null
     @Volatile private var recordingActive = false
     private var recordingThread: Thread? = null
@@ -80,6 +81,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         content.addView(space(18))
         status = label("Preparando motor de voz del dispositivo…", 14, 0xFFBDB8C8.toInt())
         content.addView(status)
+        selectedVoiceSummary = label("Voz activa: " + (getSharedPreferences("voiceclone", MODE_PRIVATE)
+            .getString("selected_profile_name", "Ninguna seleccionada") ?: "Ninguna seleccionada"), 13, 0xFF78D6B0.toInt())
+        content.addView(selectedVoiceSummary)
         content.addView(space(18))
         content.addView(label("TEXTO PARA CONVERTIR EN VOZ", 13, 0xFFBDB8C8.toInt()))
         textInput = EditText(this).apply {
@@ -107,7 +111,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         content.addView(actionButton("Grabar muestra con micrófono") { startRecording() })
         content.addView(actionButton("Detener grabación") { stopRecording() })
         content.addView(actionButton("Exportar última muestra grabada") { exportLatestSample() })
-        content.addView(actionButton("Leer texto con voz local del teléfono") { speakText() })
+        content.addView(actionButton("Generar con la voz seleccionada") { speakText() })
         content.addView(actionButton("Guardar audio WAV") { saveWav() })
         content.addView(actionButton("Detener reproducción") { tts.stop() })
         content.addView(space(18))
@@ -142,6 +146,18 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         setPadding(16, 10, 16, 10)
         setOnClickListener { action() }
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::selectedVoiceSummary.isInitialized) {
+            val prefs = getSharedPreferences("voiceclone", MODE_PRIVATE)
+            selectedVoiceSummary.text = "Voz activa: " + (prefs.getString("selected_profile_name", "Ninguna seleccionada") ?: "Ninguna seleccionada")
+            val voiceId = prefs.getString("selected_tts_voice", null)
+            if (::tts.isInitialized && voiceId != null) {
+                tts.voices?.firstOrNull { it.name == voiceId }?.let { runCatching { tts.voice = it } }
+            }
+        }
     }
 
     override fun onInit(result: Int) {
