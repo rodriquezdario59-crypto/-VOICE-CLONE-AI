@@ -7,6 +7,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.media.MediaRecorder
+import android.media.AudioRecord
+import android.media.AudioFormat
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
@@ -27,7 +31,10 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private lateinit var status: TextView
     private lateinit var textInput: EditText
     private lateinit var samplesSummary: TextView
-    private var recorder: MediaRecorder? = null
+    private var recorder: AudioRecord? = null
+    @Volatile private var recordingActive = false
+    private var recordingThread: Thread? = null
+    private var recordingPcmFile: File? = null
     private var recordingFile: File? = null
     private var selectedSampleFile: File? = null
     private var sampleCount = 0
@@ -175,11 +182,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun exportLatestSample() {
         val dir = File(filesDir, "voice_samples")
-        val sample = selectedSampleFile?.takeIf { it.exists() && it.extension.lowercase() == "m4a" }
+        val sample = selectedSampleFile?.takeIf { it.exists() && it.extension.lowercase() == "wav" }
             ?: dir.listFiles()
                 ?.filter { it.isFile && it.extension.lowercase() == "m4a" }
                 ?.maxByOrNull { it.lastModified() }
-        if (sample == null || !sample.exists()) return toast("No se encontró una grabación M4A.")
+        if (sample == null || !sample.exists()) return toast("No se encontró una grabación WAV.")
         openSampleSavePicker(sample)
     }
 
@@ -187,8 +194,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         pendingSampleExport = sample
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "audio/mp4"
-            putExtra(Intent.EXTRA_TITLE, sample.name)
+            type = "audio/wav"
+            putExtra(Intent.EXTRA_TITLE, sample.nameWithoutExtension + ".wav")
         }
         try {
             startActivityForResult(intent, requestExportSample)
@@ -291,7 +298,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 contentResolver.openOutputStream(uri, "w")!!.use { output ->
                     sample.inputStream().use { input -> input.copyTo(output) }
                 }
-                status.text = "Muestra M4A exportada a la carpeta que elegiste."
+                status.text = "Muestra WAV exportada a la carpeta que elegiste."
                 toast("Muestra exportada correctamente. Revisa la carpeta que seleccionaste, normalmente Descargas.")
             } catch (e: Exception) {
                 toast("No se pudo exportar la muestra: " + e.message)
@@ -343,20 +350,31 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         try {
             val dir = File(filesDir, "voice_samples").apply { mkdirs() }
-            recordingFile = File(dir, "recording_${System.currentTimeMillis()}.m4a")
-            val mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this) else {
-                @Suppress("DEPRECATION")
-                MediaRecorder()
+            val stamp = System.currentTimeMillis()
+            recordingFile = File(dir, "recording_${stamp}.wav")
+            recordingPcmFile = File(cacheDir, "recording_${stamp}.pcm")
+            val rate = 16000
+            val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+            if (minBuffer <= 0) throw IllegalStateException("No se pudo preparar el micrófono.")
+            val audio = AudioRecord(MediaRecorder.AudioSource.MIC, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, 8192))
+            if (audio.state != AudioRecord.STATE_INITIALIZED) {
+                audio.release()
+                throw IllegalStateException("El micrófono no pudo inicializarse.")
             }
-            recorder = mediaRecorder.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setOutputFile(recordingFile!!.absolutePath)
-                prepare()
-                start()
-            }
-            status.text = "Grabando muestra de voz…"
+            recorder = audio
+            audio.startRecording()
+            recordingActive = true
+            val pcm = recordingPcmFile!!
+            recordingThread = Thread {
+                val buffer = ByteArray(maxOf(minBuffer, 4096))
+                FileOutputStream(pcm).use { output ->
+                    while (recordingActive) {
+                        val n = audio.read(buffer, 0, buffer.size)
+                        if (n > 0) output.write(buffer, 0, n)
+                    }
+                }
+            }.also { it.start() }
+            status.text = "Grabando voz en WAV (16 kHz)…"
         } catch (e: Exception) {
             recorder?.release()
             recorder = null
@@ -364,21 +382,52 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun writePcmAsWav(pcmFile: File, wavFile: File, sampleRate: Int, channels: Int, bitsPerSample: Int) {
+        val dataSize = pcmFile.length().toInt()
+        val byteRate = sampleRate * channels * bitsPerSample / 8
+        FileOutputStream(wavFile).use { output ->
+            fun writeInt(v: Int) {
+                output.write(v and 255); output.write((v shr 8) and 255)
+                output.write((v shr 16) and 255); output.write((v shr 24) and 255)
+            }
+            fun writeShort(v: Int) { output.write(v and 255); output.write((v shr 8) and 255) }
+            output.write("RIFF".toByteArray(Charsets.US_ASCII)); writeInt(36 + dataSize)
+            output.write("WAVE".toByteArray(Charsets.US_ASCII)); output.write("fmt ".toByteArray(Charsets.US_ASCII))
+            writeInt(16); writeShort(1); writeShort(channels); writeInt(sampleRate)
+            writeInt(byteRate); writeShort(channels * bitsPerSample / 8); writeShort(bitsPerSample)
+            output.write("data".toByteArray(Charsets.US_ASCII)); writeInt(dataSize)
+            FileInputStream(pcmFile).use { it.copyTo(output) }
+        }
+    }
+
     private fun stopRecording() {
         val active = recorder ?: return toast("No hay grabación activa.")
         var completedSample: File? = null
         try {
+            recordingActive = false
             active.stop()
-            sampleCount++
-            selectedSampleFile = recordingFile
-            completedSample = recordingFile
-            status.text = "Grabación guardada internamente. Elige dónde quieres guardar una copia."
-            toast("Grabación terminada. Ahora puedes elegir la carpeta donde guardar una copia.")
-        } catch (_: Exception) {
-            toast("La grabación fue demasiado corta o falló.")
-        } finally {
+            recordingThread?.join(2000)
             active.release()
             recorder = null
+            val pcm = recordingPcmFile ?: throw IllegalStateException("No se encontró el audio temporal.")
+            val wav = recordingFile ?: throw IllegalStateException("No se encontró el archivo WAV.")
+            writePcmAsWav(pcm, wav, 16000, 1, 16)
+            pcm.delete()
+            recordingPcmFile = null
+            if (wav.length() <= 44L) throw IllegalStateException("La grabación quedó vacía.")
+            sampleCount++
+            selectedSampleFile = wav
+            completedSample = wav
+            status.text = "Grabación WAV guardada internamente. Elige dónde guardar una copia."
+            toast("Grabación WAV terminada correctamente.")
+        } catch (e: Exception) {
+            recordingActive = false
+            runCatching { active.stop() }
+            active.release()
+            recorder = null
+            recordingPcmFile?.delete()
+            recordingPcmFile = null
+            toast("No se pudo finalizar la grabación WAV: ${e.message}")
         }
         completedSample?.let { sample ->
             AlertDialog.Builder(this)
