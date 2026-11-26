@@ -3,6 +3,7 @@ package ai.voiceclone.app
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.graphics.drawable.GradientDrawable
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -64,7 +65,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(24, 28, 24, 24)
-            setBackgroundColor(0xFF101014.toInt())
+            setBackgroundColor(0xFF0B1220.toInt())
         }
         val scroll = ScrollView(this)
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -85,8 +86,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             setTextColor(0xFFFFFFFF.toInt())
             setHintTextColor(0xFF88838F.toInt())
             setHint("Escribe aquí hasta 3.000 caracteres")
-            setBackgroundColor(0xFF24232A.toInt())
-            setPadding(14, 14, 14, 14)
+            background = GradientDrawable().apply {
+                setColor(0xFF17263A.toInt())
+                cornerRadius = 20f
+            }
+            setPadding(16, 16, 16, 16)
             minLines = 5
             maxLines = 9
             gravity = Gravity.TOP
@@ -127,8 +131,17 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun actionButton(title: String, action: () -> Unit) = Button(this).apply {
         text = title
         isAllCaps = false
+        textSize = 14f
+        setTextColor(0xFFEAF5FF.toInt())
+        val primary = title.contains("Leer texto") || title.contains("Guardar audio")
+        background = GradientDrawable().apply {
+            setColor(if (primary) 0xFF1769A6.toInt() else 0xFF1A2A3D.toInt())
+            cornerRadius = 18f
+        }
+        minHeight = 52
+        setPadding(16, 10, 16, 10)
         setOnClickListener { action() }
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
     }
 
     override fun onInit(result: Int) {
