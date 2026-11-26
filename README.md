@@ -42,3 +42,6 @@ El workflow de GitHub Actions genera `app-debug.apk` como artefacto descargable.
 ## Privacidad y consentimiento
 
 Las referencias se guardan en el almacenamiento privado de VOICE CLONE AI. Utiliza solamente grabaciones propias o muestras para las que tengas autorización explícita y legal. No presentes audio sintético como si fuera una grabación auténtica de otra persona.
+
+
+Build verification: latest UI and engine-selection updates.
