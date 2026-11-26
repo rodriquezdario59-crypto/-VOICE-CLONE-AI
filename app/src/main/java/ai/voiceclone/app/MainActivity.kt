@@ -26,6 +26,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private lateinit var tts: TextToSpeech
     private lateinit var status: TextView
     private lateinit var textInput: EditText
+    private lateinit var samplesSummary: TextView
     private var recorder: MediaRecorder? = null
     private var recordingFile: File? = null
     private var selectedSampleFile: File? = null
@@ -83,7 +84,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         content.addView(actionButton("Guardar audio WAV") { saveWav() })
         content.addView(actionButton("Detener reproducción") { tts.stop() })
         content.addView(space(18))
-        content.addView(label("MUESTRAS DE VOZ", 13, 0xFFBDB8C8.toInt()))
+        content.addView(label("MUESTRAS IMPORTADAS", 13, 0xFFBDB8C8.toInt()))
+        samplesSummary = label("Muestras guardadas localmente: 0", 12, 0xFFAAA5B1.toInt())
+        content.addView(samplesSummary)
         content.addView(label("Carpeta de grabaciones: almacenamiento interno de la aplicación / voice_samples", 12, 0xFFAAA5B1.toInt()))
         content.addView(label("Pulsa «Importar muestra de voz» para elegir una grabación guardada aquí o buscar un audio en el teléfono. La selección no clona por sí sola una voz.", 12, 0xFFAAA5B1.toInt()))
         scroll.addView(content)
@@ -218,8 +221,26 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "audio/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
-        startActivityForResult(intent, requestImportAudio)
+        try {
+            startActivityForResult(intent, requestImportAudio)
+            status.text = "Elige un archivo de audio. Después de seleccionarlo, espera la confirmación."
+        } catch (e: Exception) {
+            status.text = "No se pudo abrir el selector de audios."
+            toast("No se pudo abrir el selector: ${e.message}")
+        }
+    }
+
+    private fun refreshSampleSummary() {
+        val dir = File(filesDir, "voice_samples")
+        val imported = dir.listFiles()?.count {
+            it.isFile && it.length() > 0L && !it.name.startsWith("recording_") &&
+                it.extension.lowercase() in listOf("audio", "m4a", "wav", "mp3", "aac", "ogg")
+        } ?: 0
+        if (::samplesSummary.isInitialized) {
+            samplesSummary.text = "Muestras guardadas localmente: $imported"
+        }
     }
 
     @Deprecated("Deprecated in Java")
@@ -268,19 +289,40 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 pendingSampleExport = null
             }
         }
-        if (requestCode == requestImportAudio && resultCode == RESULT_OK) {
-            val uri = data?.data ?: return
+        if (requestCode == requestImportAudio) {
+            if (resultCode != RESULT_OK) {
+                status.text = "No se seleccionó ningún audio. Puedes volver a pulsar Importar muestra de voz."
+                return
+            }
+            val uri = data?.data
+            if (uri == null) {
+                status.text = "El selector no entregó el archivo. Intenta seleccionarlo otra vez."
+                toast("No se recibió el archivo de audio.")
+                return
+            }
+            var destination: File? = null
             try {
                 val dir = File(filesDir, "voice_samples").apply { mkdirs() }
-                val destination = File(dir, "sample_${System.currentTimeMillis()}.audio")
-                contentResolver.openInputStream(uri)?.use { input ->
-                    destination.outputStream().use { output -> input.copyTo(output) }
+                destination = File(dir, "sample_${System.currentTimeMillis()}.audio")
+                val input = contentResolver.openInputStream(uri)
+                    ?: throw IllegalStateException("Android no pudo abrir el archivo seleccionado.")
+                input.use { source ->
+                    destination.outputStream().use { output -> source.copyTo(output) }
                 }
-                sampleCount++
+                if (!destination.exists() || destination.length() == 0L) {
+                    destination.delete()
+                    throw IllegalStateException("El archivo llegó vacío.")
+                }
                 selectedSampleFile = destination
-                status.text = "Audio importado y guardado en la carpeta interna voice_samples."
-                toast("Audio guardado en la carpeta interna de muestras.")
-            } catch (e: Exception) { toast("No se pudo importar el audio: ${e.message}") }
+                sampleCount++
+                refreshSampleSummary()
+                status.text = "¡Muestra importada correctamente! Archivo guardado en voice_samples."
+                toast("Muestra importada correctamente.")
+            } catch (e: Exception) {
+                destination?.delete()
+                status.text = "No se pudo importar la muestra: ${e.message}"
+                toast("Error al importar: ${e.message}")
+            }
         }
     }
 
