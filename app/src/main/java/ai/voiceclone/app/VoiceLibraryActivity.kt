@@ -240,10 +240,20 @@ class VoiceLibraryActivity : Activity() {
             .setTitle("Vincular referencia: ${profile.name}")
             .setMessage("El nombre del audio se conserva como nombre del perfil. Selecciona el identificador que Pocket TTS expone para esta referencia:")
             .setItems(labels) { _, which ->
-                profile.engineVoiceId = engineVoices[which].name
+                val chosen = engineVoices[which]
+                val alreadyUsedBy = profiles.firstOrNull { it.id != profile.id && it.engineVoiceId == chosen.name }
+                if (alreadyUsedBy != null) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Identificador ya utilizado")
+                        .setMessage("Pocket TTS ofrece el mismo identificador para «${alreadyUsedBy.name}». No se asignará a «${profile.name}» porque ambas referencias terminarían usando la misma voz del motor. Registra una voz independiente en Pocket TTS y actualiza la lista.")
+                        .setPositiveButton("Entendido", null)
+                        .show()
+                    return@setItems
+                }
+                profile.engineVoiceId = chosen.name
                 saveProfiles()
                 renderProfiles()
-                toast("Voz vinculada correctamente.")
+                toast("«${profile.name}» quedó vinculada al identificador ${chosen.name}.")
             }
             .setNegativeButton("Cancelar", null)
             .show()
