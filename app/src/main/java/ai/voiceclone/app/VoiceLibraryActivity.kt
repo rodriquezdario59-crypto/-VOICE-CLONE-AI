@@ -253,11 +253,18 @@ class VoiceLibraryActivity : Activity() {
             toast("Primero vincula esta referencia con una voz disponible del motor.")
             return
         }
+        val availableVoice = engineVoices.firstOrNull { it.name == profile.engineVoiceId }
+        if (availableVoice == null) {
+            toast("La voz vinculada ya no aparece en Pocket TTS. Pulsa Vincular y selecciónala otra vez.")
+            return
+        }
         getSharedPreferences("voiceclone", MODE_PRIVATE).edit()
-            .putString("selected_tts_voice", profile.engineVoiceId)
+            .putString("selected_tts_voice", availableVoice.name)
             .putString("selected_profile_name", profile.name)
+            .putString("selected_profile_id", profile.id)
             .apply()
-        toast("${profile.name} seleccionada. Vuelve al estudio para generar audio.")
+        status.text = "Voz activa: ${profile.name}"
+        toast("${profile.name} seleccionada. Esta será la voz que se aplicará al generar.")
         finish()
     }
 
