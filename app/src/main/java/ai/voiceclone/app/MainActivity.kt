@@ -2,6 +2,7 @@ package ai.voiceclone.app
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -27,6 +28,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private lateinit var textInput: EditText
     private var recorder: MediaRecorder? = null
     private var recordingFile: File? = null
+    private var selectedSampleFile: File? = null
     private var sampleCount = 0
     private val requestRecordAudio = 410
     private val requestImportAudio = 411
@@ -81,8 +83,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         content.addView(actionButton("Guardar audio WAV") { saveWav() })
         content.addView(actionButton("Detener reproducción") { tts.stop() })
         content.addView(space(18))
-        content.addView(label("MUESTRAS IMPORTADAS", 13, 0xFFBDB8C8.toInt()))
-        content.addView(label("Muestras guardadas localmente: 0. La importación y grabación no clonan por sí solas una voz.", 12, 0xFFAAA5B1.toInt()))
+        content.addView(label("MUESTRAS DE VOZ", 13, 0xFFBDB8C8.toInt()))
+        content.addView(label("Carpeta de grabaciones: almacenamiento interno de la aplicación / voice_samples", 12, 0xFFAAA5B1.toInt()))
+        content.addView(label("Pulsa «Importar muestra de voz» para elegir una grabación guardada aquí o buscar un audio en el teléfono. La selección no clona por sí sola una voz.", 12, 0xFFAAA5B1.toInt()))
         scroll.addView(content)
         root.addView(scroll)
         setContentView(root)
@@ -183,6 +186,35 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun importAudio() {
+        val dir = File(filesDir, "voice_samples").apply { mkdirs() }
+        val savedSamples = dir.listFiles()
+            ?.filter { it.isFile && it.length() > 0L && it.extension.lowercase() in listOf("m4a", "wav", "mp3", "audio", "aac", "ogg") }
+            ?.sortedByDescending { it.lastModified() }
+            ?: emptyList()
+
+        val options = mutableListOf<String>()
+        savedSamples.forEach { file ->
+            val kind = if (file.name.startsWith("recording_")) "Grabación" else "Audio importado"
+            options.add("$kind • ${file.name}")
+        }
+        options.add("Buscar un audio en las carpetas del teléfono")
+
+        AlertDialog.Builder(this)
+            .setTitle("Seleccionar muestra de voz")
+            .setItems(options.toTypedArray()) { _, which ->
+                if (which < savedSamples.size) {
+                    selectedSampleFile = savedSamples[which]
+                    status.text = "Muestra seleccionada: ${savedSamples[which].name}. Ubicación: carpeta interna voice_samples."
+                    toast("Muestra seleccionada correctamente.")
+                } else {
+                    openAudioPicker()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun openAudioPicker() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "audio/*"
@@ -228,8 +260,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 contentResolver.openOutputStream(uri, "w")!!.use { output ->
                     sample.inputStream().use { input -> input.copyTo(output) }
                 }
-                status.text = "Muestra M4A exportada correctamente."
-                toast("Muestra exportada correctamente.")
+                status.text = "Muestra M4A exportada a la carpeta que elegiste."
+                toast("Muestra exportada correctamente. Revisa la carpeta que seleccionaste, normalmente Descargas.")
             } catch (e: Exception) {
                 toast("No se pudo exportar la muestra: " + e.message)
             } finally {
@@ -245,7 +277,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     destination.outputStream().use { output -> input.copyTo(output) }
                 }
                 sampleCount++
-                status.text = "Muestra guardada localmente ($sampleCount). Motor de clonación pendiente."
+                selectedSampleFile = destination
+                status.text = "Audio importado y guardado en la carpeta interna voice_samples."
+                toast("Audio guardado en la carpeta interna de muestras.")
             } catch (e: Exception) { toast("No se pudo importar el audio: ${e.message}") }
         }
     }
@@ -283,7 +317,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         try {
             active.stop()
             sampleCount++
-            status.text = "Grabación guardada localmente ($sampleCount muestras)."
+            selectedSampleFile = recordingFile
+            status.text = "Grabación guardada en la carpeta interna voice_samples. Pulsa «Importar muestra de voz» para seleccionarla."
         } catch (_: Exception) { toast("La grabación fue demasiado corta o falló.") }
         finally { active.release(); recorder = null }
     }
