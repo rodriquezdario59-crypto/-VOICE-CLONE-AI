@@ -146,7 +146,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         lateinit var bar: SeekBar
         val value = TextView(this).apply { textSize = 12f; setTextColor(0xFF78D6B0.toInt()); gravity = Gravity.END; layoutParams = LinearLayout.LayoutParams(42, -2) }
         val minus = Button(this).apply { text = "−"; isAllCaps = false; minWidth = 40; setOnClickListener { bar.progress = (bar.progress - 5).coerceAtLeast(0) } }
-        bar = SeekBar(this).apply { max = max - min; progress = prefs.getInt(key, defaultValue).coerceIn(min, max) - min; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
+        bar = SeekBar(this).apply { this.max = max - min; progress = prefs.getInt(key, defaultValue).coerceIn(min, max) - min; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
         val plus = Button(this).apply { text = "+"; isAllCaps = false; minWidth = 40; setOnClickListener { bar.progress = (bar.progress + 5).coerceAtMost(bar.max) } }
         fun update() { val amount = bar.progress + min; value.text = amount.toString() + "%"; prefs.edit().putInt(key, amount).apply(); applyVoiceParameters() }
         bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
