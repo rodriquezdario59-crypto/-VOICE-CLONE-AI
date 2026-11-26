@@ -19,6 +19,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -68,6 +69,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val scroll = ScrollView(this)
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
+        val brandIcon = ImageView(this).apply {
+            setImageResource(R.drawable.ic_voice_clone)
+            layoutParams = LinearLayout.LayoutParams(88, 88).apply { gravity = Gravity.CENTER_HORIZONTAL }
+        }
+        content.addView(brandIcon)
         content.addView(label("VOICE CLONE AI", 28, 0xFFFFFFFF.toInt()))
         content.addView(label("Motor local • Sin servicios externos", 14, 0xFFBDB8C8.toInt()))
         content.addView(space(18))
