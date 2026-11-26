@@ -133,6 +133,20 @@ class VoiceLibraryActivity : Activity() {
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 }
     }
 
+    private fun openPocketTts() {
+        val launch = packageManager.getLaunchIntentForPackage(pocketEnginePackage)
+        if (launch == null) {
+            toast("No se encontró Pocket TTS. Instálalo primero para usar clonación local.")
+        } else {
+            startActivity(launch)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (tts != null) refreshEngineVoices()
+    }
+
     private fun openPicker() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
