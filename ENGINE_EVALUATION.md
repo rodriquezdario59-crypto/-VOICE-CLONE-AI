@@ -2,65 +2,71 @@
 
 Fecha de revisión: 2026-11-27
 
-## Motor elegido para la primera integración: Qwen3-TTS Base 12Hz
+## Decisión de integración: MOSS-TTS-Nano ONNX CPU
 
-La decisión ya no es probar motores al azar: el motor objetivo será **Qwen3-TTS Base 12Hz**, empezando por la variante **0.6B cuantizada Q4_K_M** para evaluar su viabilidad en el Galaxy S10+. La variante 1.7B se conserva como referencia de calidad para equipos con más memoria, no como objetivo inicial del teléfono.
+El motor objetivo pasa a ser **MOSS-TTS-Nano (100M) con ONNX Runtime CPU**. Es el candidato que mejor equilibra tamaño, español, clonación por audio de referencia y ejecución local en CPU.
 
-La razón principal es que el modelo oficial ofrece clonación desde audio de referencia, soporte explícito de español y generación condicionada por texto. La documentación oficial muestra que el modo de clonación de mayor fidelidad utiliza tanto `ref_audio` como `ref_text` (transcripción exacta del audio de referencia). El modelo también publica métricas de consistencia del texto (WER) y similitud de hablante para español. Esas cifras son resultados de laboratorio del fabricante, no una garantía para esta APK.
+La documentación oficial del proyecto declara 20 idiomas, incluido español; generación de voz por referencia; salida de audio estéreo a 48 kHz; y una ruta ONNX CPU sin dependencia de PyTorch durante la inferencia. El equipo informa mejoras de eficiencia de casi 2x en sus propias pruebas y uso fluido con un solo núcleo en un MacBook Air M4. Esos resultados son del fabricante y NO garantizan el mismo rendimiento en un Samsung Galaxy S10+.
 
-**Requisito obligatorio para corregir el problema que describes:** no basta con extraer un embedding de la voz. CLON AI PRO debe implementar el flujo de clonación con referencia completa (audio + transcripción exacta, cuando el backend lo permita), y la generación debe verificar que el texto se procese íntegro. La interfaz Android comunitaria que hemos revisado documenta extracción de embedding, pero no demuestra por sí sola que ya exponga todo el modo ICL con `ref_text`; esa parte debe desarrollarse y probarse antes de adoptarla.
+Fuentes oficiales:
+- https://github.com/OpenMOSS/MOSS-TTS-Nano
+- https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Nano-100M-ONNX
+- https://huggingface.co/OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX
 
-## Base Android evaluada: Qwen3-TTS Android + qwen3-tts.cpp
+## Por qué se descarta Qwen3-TTS como motor inicial
 
-Repositorio comunitario revisado: https://github.com/Danmoreng/qwen3-tts-android
+La variante Qwen3-TTS 0.6B Q4_K_M que se probó en el teléfono tardó varios minutos sin completar una frase breve. No se seguirá usando como motor predeterminado de CLON AI PRO. El rendimiento observado en ese teléfono no satisface el requisito básico de respuesta.
 
-### Lo que está confirmado en el código/documentación consultados
+## Hechos confirmados y límites de la integración Android
 
-- Proyecto Android nativo escrito en Kotlin.
-- Runtime nativo C++ expuesto a Kotlin mediante JNI.
-- Objetivo nativo arm64-v8a y Android 12 / API 31 o superior.
-- Ruta de inferencia por CPU.
-- Paquete Q4_K_M documentado con los archivos qwen-tokenizer-12hz-Q4_K_M.gguf y qwen-talker-0.6b-base-Q4_K_M.gguf.
-- La documentación estima aproximadamente 1,2 GB para el paquete de modelo.
-- La API Kotlin QwenEngine expone synthesize(text, referenceWav, speakerEmbeddingPath, params), extractSpeakerEmbedding(referenceWav, outputPath), control de hilos CPU y capacidades del modelo.
-- La licencia del repositorio de la aplicación comunitaria se declara MIT.
+### Confirmado en el proyecto oficial MOSS
+- Modelo MOSS-TTS-Nano de aproximadamente 100 millones de parámetros.
+- Soporte declarado para español y otros 19 idiomas.
+- ONNX Runtime CPU para inferencia sin PyTorch.
+- El flujo ONNX oficial admite audio de referencia directo para clonación.
+- El flujo completo requiere tanto los modelos TTS como el MOSS-Audio-Tokenizer-Nano.
+- La inferencia oficial utiliza SentencePiece para convertir texto en IDs y el encoder del audio tokenizer para convertir la referencia de voz en códigos de audio.
+- El repositorio fuente MOSS-TTS-Nano declara licencia Apache-2.0. La licencia de cada conjunto de pesos y de cada dependencia debe verificarse antes de redistribuirlos.
 
-### Lo que todavía NO está demostrado
+### Limitación crítica del ejemplo Android oficial
+El ejemplo Android publicado por OpenMOSS es una prueba mínima: genera WAV desde prompts pre-tokenizados y voces de muestra ya incluidas en el manifiesto. No implementa por sí mismo texto arbitrario, tokenizer SentencePiece ni codificación de una grabación propia para clonación.
 
-- Que compile e integre sin cambios dentro de nuestro proyecto actual.
-- Que el modelo y todas sus dependencias permitan la redistribución que queremos. Hay que revisar por separado la licencia del runtime, submódulos, pesos y conversiones cuantizadas.
-- Que el Samsung Galaxy S10+ concreto pueda cargar el modelo sin quedarse sin memoria, calentarse en exceso o tardar demasiado.
-- Que la clonación de una voz española desde un WAV funcione con la calidad requerida.
-- Que el port Android comunitario implemente el modo ICL completo con transcripción `ref_text`; su README solo confirma perfiles y extracción de embeddings. No debemos confundir esto con clonación ICL completa.
-- Que los resultados de WER/SIM publicados por Qwen se reproduzcan con el runtime Android cuantizado Q4_K_M.
-- Que los controles de velocidad y tono puedan aplicarse de forma independiente en el camino nativo.
-- Que la aplicación tenga un flujo completo de perfiles de voz clonados con importación, guardado, selección y generación. El proyecto comunitario reconoce en su plan que su interfaz de clonación aún no está implementada como función completa.
+Por tanto, **copiar el ejemplo Android sin ampliarlo NO entrega clonación real**. La integración de CLON AI PRO debe portar el flujo completo de ONNX documentado por el proyecto oficial: tokenizer de texto, preprocesamiento de referencia, encoder de audio, generación autoregresiva y decoder de audio.
 
-## Plan de integración por fases
+## Diseño de integración Android
 
-1. **Congelar una compilación base:** compilar el código actual de CLON AI PRO y conservar el artefacto como referencia.
-2. **Validar el runtime por separado:** construir el proyecto Qwen comunitario sin cambiarle el nombre y revisar el resultado, dependencias y licencias.
-3. **Prueba real en el teléfono:** comprobar descarga/carga del modelo, generación corta en español, memoria, temperatura y duración.
-4. **Prueba de referencia autorizada:** registrar un audio autorizado y su transcripción literal; implementar referencia ICL (audio + texto) cuando sea posible, comparar con modo embedding-only y verificar que no se pierdan palabras en frases largas en español.
-5. **Adaptador nativo:** incorporar JNI/C++ al proyecto CLON AI PRO sin perder biblioteca, importación, grabación ni controles actuales.
-6. **Perfiles de voz:** cada perfil debe guardar referencia, embedding, nombre, consentimiento registrado y metadatos del motor; poder previsualizarse, seleccionarse, exportarse e importarse.
-7. **Estudio de audio:** progreso, cancelar, reproducir, guardar WAV, conversión MP3, historial y eliminación de resultados.
-8. **Pruebas de regresión:** verificar cada función en Android 12 y revisar fallos, cierres y recuperación después de reiniciar.
-9. **APK candidata:** publicar solo después de que la compilación y las pruebas de dispositivo estén verificadas.
+1. **Conservar la aplicación existente:** biblioteca local, grabación, importación WAV/MP3, nombres de perfiles, selección, previsualización, exportación ZIP, historial y controles de velocidad/tono.
+2. **Añadir ONNX Runtime Android:** utilizar CPU como backend inicial, con hilos configurables y generación fuera del hilo principal.
+3. **Descarga de modelos bajo demanda:** guardar los pesos en almacenamiento privado de la app, mostrar progreso real, validar tamaño/hash cuando estén publicados y permitir reanudar o repetir descargas. No incluir cientos de MB de pesos dentro del APK.
+4. **Tokenizer de texto:** integrar una implementación Android compatible con el archivo tokenizer.model y verificar que los IDs coincidan con SentencePiece oficial.
+5. **Audio de referencia:** decodificar WAV/MP3/M4A, convertir a PCM float, remuestrear al formato requerido por el codec y normalizar canales sin alterar el timbre.
+6. **Clonación real:** ejecutar el encoder del MOSS-Audio-Tokenizer-Nano sobre el audio importado y pasar sus códigos de referencia al modelo TTS. No marcar una voz como clonada si solo se guardó el archivo.
+7. **Generación larga:** dividir el texto por límites de tokens y puntuación, mantener el mismo audio de referencia entre fragmentos, concatenar con pausas naturales y conservar el orden íntegro del texto.
+8. **Estudio de audio:** progreso, cancelación, reproducción, exportación WAV y MP3, historial y eliminación.
+9. **Perfiles persistentes:** guardar nombre, referencia, consentimiento confirmado, parámetros y versión del motor. Las voces deben seguir disponibles al reiniciar la aplicación.
+10. **Pruebas de dispositivo:** medir primera carga, memoria, temperatura, tiempo hasta el primer audio, velocidad real de generación y fidelidad de voz en el Samsung Galaxy S10+ con Android 12.
 
-## Criterios mínimos de aceptación
+## Motor complementario
 
-- No depender de ElevenLabs, créditos, suscripciones ni un servidor remoto para generar.
-- No afirmar clonación cuando solo se esté usando TTS genérico.
-- No aceptar como motor final un backend que solo copie el timbre por embedding si eso provoca pérdida de contenido; priorizar el modo ICL con texto de referencia y pruebas de integridad textual.
-- Probar frases de control con conteo de palabras y transcripción automática del audio generado; bloquear la publicación si faltan palabras o se repiten fragmentos.
-- No perder referencias o perfiles al cerrar y volver a abrir la app.
-- No bloquear la interfaz durante la inferencia.
-- Informar con claridad si faltan modelos, memoria o compatibilidad.
-- Usar solo voces para las que exista autorización.
+**Kokoro-82M / LiteRT** puede evaluarse como sintetizador rápido de voces predefinidas en español (por ejemplo, ef_dora, em_alex y em_santa). No es un clonador de voz y nunca debe presentarse como tal. Solo se añadirá como alternativa de TTS normal si pasa pruebas reales en el dispositivo.
 
-## Decisión de producto
+## Criterios obligatorios antes de publicar una APK candidata
 
-El motor objetivo es **Qwen3-TTS Base 12Hz**. Para el Galaxy S10+ se inicia la evaluación con **0.6B Q4_K_M** por sus requisitos más moderados. La calidad de referencia es la variante 1.7B, pero no se dará por viable en el teléfono sin medir memoria, velocidad y temperatura.
+- La generación debe ejecutarse localmente y sin servicios remotos obligatorios.
+- Debe poder sintetizar texto arbitrario en español, no solo prompts de demostración.
+- Debe aceptar una grabación de referencia autorizada y codificarla con el audio tokenizer.
+- La salida debe conservar todas las palabras, sin omisiones ni repeticiones.
+- El perfil debe sonar reconociblemente similar a su referencia en pruebas de escucha; la similitud no se debe afirmar sin evaluación.
+- La interfaz no debe congelarse y debe permitir cancelar una generación.
+- El motor debe informar claramente si faltan modelos, espacio o memoria.
+- No publicar como clonación funcional una compilación que solo use voces predefinidas o TTS de Android.
 
-La integración se considerará terminada solo cuando CLON AI PRO genere con voz autorizada y demuestre lectura íntegra en español. Se exigirá conservar el texto completo, sin palabras omitidas, repeticiones ni fragmentos saltados. Si la versión Q4_K_M Android no supera esas pruebas, no se publicará como reemplazo definitivo; se ajustará el backend o se buscará otra ruta compatible. Pocket TTS deja de ser el motor objetivo y se mantiene únicamente como referencia de comparación durante la migración.
+## Estado
+
+- Motor elegido: MOSS-TTS-Nano ONNX CPU.
+- Qwen3-TTS: descartado como motor inicial por el resultado observado en el teléfono.
+- Kokoro: candidato secundario solo para TTS normal.
+- Integración Android completa: pendiente de implementación y pruebas.
+- APK de producción: NO aprobada hasta superar todos los criterios anteriores.
+
+La prioridad es una aplicación que funcione de verdad. No se sustituirá la clonación real por una pantalla que solo guarde audios o cambie el nombre de una voz genérica.
