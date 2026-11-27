@@ -42,6 +42,7 @@ jobs:
           sed -i 's/applicationId = "com.qwen.tts.android"/applicationId = "ai.clonaipro.app"/' android-source/app/build.gradle.kts
           sed -i 's/versionName = "0.1.0"/versionName = "1.0.0"/' android-source/app/build.gradle.kts
           sed -i 's/<string name="app_name">Qwen3 TTS<\//<string name="app_name">CLON AI PRO<\//' android-source/app/src/main/res/values/strings.xml
+          sed -i 's/val selectedLanguageId: Int = 2050/val selectedLanguageId: Int = 2054/' android-source/app/src/main/java/com/qwen/tts/android/MainActivity.kt
 
       - name: Build Android APK
         working-directory: android-source
