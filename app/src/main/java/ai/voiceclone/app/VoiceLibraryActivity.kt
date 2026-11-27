@@ -237,8 +237,7 @@ class VoiceLibraryActivity : Activity() {
             "${index + 1}. ${profile.name}  →  ${voice.name}  •  ${voice.locale.displayName}"
         }.toTypedArray()
         AlertDialog.Builder(this)
-            .setTitle("Vincular referencia: ${profile.name}")
-            .setMessage("El nombre del audio se conserva como nombre del perfil. Selecciona el identificador que Pocket TTS expone para esta referencia:")
+            .setTitle("Selecciona la voz del motor para: ${profile.name}")
             .setItems(labels) { _, which ->
                 val chosen = engineVoices[which]
                 val alreadyUsedBy = profiles.firstOrNull { it.id != profile.id && it.engineVoiceId == chosen.name }
