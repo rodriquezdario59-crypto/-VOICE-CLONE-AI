@@ -77,7 +77,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             layoutParams = LinearLayout.LayoutParams(88, 88).apply { gravity = Gravity.CENTER_HORIZONTAL }
         }
         content.addView(brandIcon)
-        content.addView(label("VOICE CLONE AI", 28, 0xFFFFFFFF.toInt()))
+        content.addView(label("CLON AI PRO", 28, 0xFFFFFFFF.toInt()))
         content.addView(label("Motor local • Sin servicios externos", 14, 0xFFBDB8C8.toInt()))
         content.addView(space(18))
         status = label("Preparando motor de voz del dispositivo…", 14, 0xFFBDB8C8.toInt())
