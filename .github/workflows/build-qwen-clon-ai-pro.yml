@@ -1,0 +1,74 @@
+name: Build CLON AI PRO - Qwen3 TTS
+
+on:
+  push:
+    paths:
+      - ".github/workflows/build-qwen-clon-ai-pro.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-qwen-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Qwen3 TTS Android engine
+        uses: actions/checkout@v4
+        with:
+          repository: Danmoreng/qwen3-tts-android
+          ref: main
+          submodules: recursive
+          path: qwen-app
+
+      - name: Prepare CLON AI PRO branding and Spanish defaults
+        working-directory: qwen-app
+        shell: bash
+        run: |
+          sed -i 's/Qwen3 TTS/CLON AI PRO/g' app/src/main/res/values/strings.xml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/src/main/java/com/qwen/tts/android/MainActivity.kt")
+          s = p.read_text()
+          s = s.replace('val text: String = "Hello World from Qwen3 TTS running on Android on-device!"',
+                        'val text: String = "Hola. Esta es una prueba de lectura en español con CLON AI PRO."')
+          s = s.replace('val selectedLanguageId: Int = 2050', 'val selectedLanguageId: Int = 2054')
+          p.write_text(s)
+          PY
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK and CMake
+        run: |
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build arm64 APK
+        working-directory: qwen-app
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease
+
+      - name: Verify and package APK
+        working-directory: qwen-app
+        run: |
+          mkdir -p artifacts
+          cp app/build/outputs/apk/release/app-release.apk artifacts/CLON-AI-PRO-Qwen3-Android12-arm64.apk
+          test -s artifacts/CLON-AI-PRO-Qwen3-Android12-arm64.apk
+          ls -lh artifacts
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CLON-AI-PRO-Qwen3-APK
+          path: qwen-app/artifacts/*.apk
+          retention-days: 30
