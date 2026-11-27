@@ -56,13 +56,13 @@ jobs:
         working-directory: qwen-app
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:assembleRelease
+          ./gradlew :app:assembleDebug
 
       - name: Verify and package APK
         working-directory: qwen-app
         run: |
           mkdir -p artifacts
-          cp app/build/outputs/apk/release/app-release.apk artifacts/CLON-AI-PRO-Qwen3-Android12-arm64.apk
+          cp app/build/outputs/apk/debug/app-debug.apk artifacts/CLON-AI-PRO-Qwen3-Android12-arm64.apk
           test -s artifacts/CLON-AI-PRO-Qwen3-Android12-arm64.apk
           ls -lh artifacts
 
