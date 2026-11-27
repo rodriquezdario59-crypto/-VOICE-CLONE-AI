@@ -70,3 +70,11 @@ Por tanto, **copiar el ejemplo Android sin ampliarlo NO entrega clonación real*
 - APK de producción: NO aprobada hasta superar todos los criterios anteriores.
 
 La prioridad es una aplicación que funcione de verdad. No se sustituirá la clonación real por una pantalla que solo guarde audios o cambie el nombre de una voz genérica.
+
+## Revisión adicional: MOSS-TTS-Nano-Reader Browser PoC
+
+Se verificó también el PoC de navegador del proyecto OpenMOSS. A diferencia del ejemplo Android mínimo, ese PoC sí ofrece carga de voces personalizadas, codificación local de la referencia de voz y síntesis ONNX en navegador. Esto confirma que el flujo completo puede ejecutarse con el stack ONNX, pero no significa que esté listo para copiarlo a CLON AI PRO.
+
+El repositorio separado MOSS-TTS-Nano-Reader no muestra un archivo LICENSE en su raíz ni metadatos de licencia visibles. Por prudencia, no se copiará ni redistribuirá su bundle JavaScript hasta aclarar sus derechos de uso. La implementación de CLON AI PRO se basará en el código Android y los componentes con licencia verificable del repositorio principal Apache-2.0, o en una autorización explícita del titular del Reader.
+
+La alternativa de envolver el PoC en WebView se mantiene como prueba técnica, no como decisión de arquitectura, hasta verificar: compatibilidad de OPFS y WebAssembly en el WebView de Android 12, política de aislamiento para WASM, selector de archivos, persistencia local, uso de memoria y licencia del código. No se publicará una APK que dependa de un sitio remoto para ejecutar la clonación.
