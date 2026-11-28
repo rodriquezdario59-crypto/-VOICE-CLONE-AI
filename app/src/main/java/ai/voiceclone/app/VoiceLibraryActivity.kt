@@ -240,7 +240,7 @@ class VoiceLibraryActivity : Activity() {
         }
         engineVoices.forEachIndexed { index, voice ->
             val language = voice.locale.getDisplayName(Locale("es")).ifBlank { "Idioma no indicado" }
-            val label = "Voz disponible ${index + 1}  •  $language"
+            val label = "${profile.name}  •  $language  •  Opción ${index + 1}"
             panel.addView(action(label, false) {
                 val alreadyUsedBy = profiles.firstOrNull { it.id != profile.id && it.engineVoiceId == voice.name }
                 if (alreadyUsedBy != null) {
