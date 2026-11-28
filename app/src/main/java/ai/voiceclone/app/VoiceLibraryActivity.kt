@@ -90,7 +90,7 @@ class VoiceLibraryActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(76, 76).apply { gravity = Gravity.CENTER_HORIZONTAL }
         }
         content.addView(brandIcon)
-        content.addView(text("VOICE CLONE AI", 13, 0xFF79C5FF.toInt(), true))
+        content.addView(text("CLON AI PRO", 13, 0xFF79C5FF.toInt(), true))
         content.addView(text("Biblioteca de voces", 27, 0xFFF4F7FC.toInt(), true))
         content.addView(text("Guarda, organiza y selecciona tus referencias de voz.", 14, 0xFF9DAEC2.toInt()))
         content.addView(space(14))
@@ -233,27 +233,33 @@ class VoiceLibraryActivity : Activity() {
             toast("No hay voces del motor disponibles. Comprueba que Pocket TTS esté instalado y tenga un modelo cargado.")
             return
         }
-        val labels = engineVoices.mapIndexed { index, voice ->
-            "${index + 1}. ${profile.name}  →  ${voice.name}  •  ${voice.locale.displayName}"
-        }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Selecciona la voz del motor para: ${profile.name}")
-            .setItems(labels) { _, which ->
-                val chosen = engineVoices[which]
-                val alreadyUsedBy = profiles.firstOrNull { it.id != profile.id && it.engineVoiceId == chosen.name }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(18, 8, 18, 8)
+        }
+        engineVoices.forEachIndexed { index, voice ->
+            val language = voice.locale.getDisplayName(Locale("es")).ifBlank { "Idioma no indicado" }
+            val label = "Voz disponible ${index + 1}  •  $language"
+            panel.addView(action(label, false) {
+                val alreadyUsedBy = profiles.firstOrNull { it.id != profile.id && it.engineVoiceId == voice.name }
                 if (alreadyUsedBy != null) {
                     AlertDialog.Builder(this)
-                        .setTitle("Identificador ya utilizado")
-                        .setMessage("Pocket TTS ofrece el mismo identificador para «${alreadyUsedBy.name}». No se asignará a «${profile.name}» porque ambas referencias terminarían usando la misma voz del motor. Registra una voz independiente en Pocket TTS y actualiza la lista.")
-                        .setPositiveButton("Entendido", null)
-                        .show()
-                    return@setItems
+                        .setTitle("Voz ya asignada")
+                        .setMessage("Esta opción ya está vinculada a «${alreadyUsedBy.name}». Elige otra voz independiente.")
+                        .setPositiveButton("Entendido", null).show()
+                } else {
+                    profile.engineVoiceId = voice.name
+                    saveProfiles()
+                    renderProfiles()
+                    toast("La voz quedó vinculada a «${profile.name}».")
+                    (panel.parent as? android.view.ViewParent)?.let { }
                 }
-                profile.engineVoiceId = chosen.name
-                saveProfiles()
-                renderProfiles()
-                toast("«${profile.name}» quedó vinculada al identificador ${chosen.name}.")
-            }
+            })
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Elige una voz para «${profile.name}»")
+            .setMessage("Los identificadores técnicos quedan ocultos. Selecciona una opción por idioma.")
+            .setView(ScrollView(this).apply { addView(panel) })
             .setNegativeButton("Cancelar", null)
             .show()
     }
@@ -324,7 +330,7 @@ class VoiceLibraryActivity : Activity() {
             }
             card.addView(text(profile.name, 17, 0xFFF1F6FC.toInt(), true))
             val linked = profile.engineVoiceId.isNotBlank()
-            card.addView(text(if (linked) "Nombre guardado: ${profile.name}\nVoz del motor: ${profile.engineVoiceId}" else "Nombre guardado: ${profile.name}\nPendiente de vincular con Pocket TTS", 11, if (linked) 0xFF78D6B0.toInt() else 0xFFF0C27A.toInt()))
+            card.addView(text(if (linked) "Voz lista para usar" else "Pendiente de vincular con el motor", 11, if (linked) 0xFF78D6B0.toInt() else 0xFFF0C27A.toInt()))
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
