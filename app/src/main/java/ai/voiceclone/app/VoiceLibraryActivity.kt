@@ -233,6 +233,7 @@ class VoiceLibraryActivity : Activity() {
             toast("No hay voces del motor disponibles. Comprueba que Pocket TTS esté instalado y tenga un modelo cargado.")
             return
         }
+        var chooser: AlertDialog? = null
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(18, 8, 18, 8)
@@ -252,16 +253,17 @@ class VoiceLibraryActivity : Activity() {
                     saveProfiles()
                     renderProfiles()
                     toast("La voz quedó vinculada a «${profile.name}».")
-                    (panel.parent as? android.view.ViewParent)?.let { }
+                    chooser?.dismiss()
                 }
             })
         }
-        AlertDialog.Builder(this)
+        chooser = AlertDialog.Builder(this)
             .setTitle("Elige una voz para «${profile.name}»")
             .setMessage("Los identificadores técnicos quedan ocultos. Selecciona una opción por idioma.")
             .setView(ScrollView(this).apply { addView(panel) })
             .setNegativeButton("Cancelar", null)
-            .show()
+            .create()
+        chooser?.show()
     }
 
     private fun selectVoice(profile: Profile) {
