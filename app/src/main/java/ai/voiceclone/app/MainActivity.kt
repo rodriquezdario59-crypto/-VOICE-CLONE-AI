@@ -35,6 +35,10 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private lateinit var textInput: EditText
     private lateinit var samplesSummary: TextView
     private lateinit var selectedVoiceSummary: TextView
+    private lateinit var expressionSummary: TextView
+    private var rateSeekBar: SeekBar? = null
+    private var pitchSeekBar: SeekBar? = null
+    private val expressionButtons = mutableListOf<Pair<Button, String>>()
     private var recorder: AudioRecord? = null
     @Volatile private var recordingActive = false
     private var recordingThread: Thread? = null
@@ -77,8 +81,10 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             layoutParams = LinearLayout.LayoutParams(88, 88).apply { gravity = Gravity.CENTER_HORIZONTAL }
         }
         content.addView(brandIcon)
-        content.addView(label("CLON AI PRO", 28, 0xFFFFFFFF.toInt()))
-        content.addView(label("Motor local • Sin servicios externos", 14, 0xFFBDB8C8.toInt()))
+        content.addView(label("CLON AI PRO", 30, 0xFF58B8FF.toInt()))
+        content.addView(label("CLONACIÓN DE VOZ INTELIGENTE", 13, 0xFFEAF5FF.toInt()))
+        content.addView(label("Tu voz… en tus manos", 15, 0xFF78D6B0.toInt()))
+        content.addView(label("Motor local • Sin pagos por generación", 12, 0xFFBDB8C8.toInt()))
         content.addView(space(18))
         status = label("Preparando motor de voz del dispositivo…", 14, 0xFFBDB8C8.toInt())
         content.addView(status)
@@ -107,6 +113,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         content.addView(adjustmentControl("Velocidad", "speech_rate", 50, 200, 100))
         content.addView(adjustmentControl("Tono", "speech_pitch", 50, 150, 100))
         content.addView(label("Los ajustes se aplican al generar o guardar audio; el efecto depende de las funciones del motor.", 11, 0xFFAAA5B1.toInt()))
+        content.addView(space(10))
+        content.addView(expressionPanel())
         content.addView(space(8))
         content.addView(label("Pocket TTS funciona como motor local cuando está instalado.", 12, 0xFFAAA5B1.toInt()))
         content.addView(space(16))
@@ -147,6 +155,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val value = TextView(this).apply { textSize = 12f; setTextColor(0xFF78D6B0.toInt()); gravity = Gravity.END; layoutParams = LinearLayout.LayoutParams(42, -2) }
         val minus = Button(this).apply { text = "−"; isAllCaps = false; minWidth = 40; setOnClickListener { bar.progress = (bar.progress - 5).coerceAtLeast(0) } }
         bar = SeekBar(this).apply { this.max = max - min; progress = prefs.getInt(key, defaultValue).coerceIn(min, max) - min; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
+        if (key == "speech_rate") rateSeekBar = bar
+        if (key == "speech_pitch") pitchSeekBar = bar
         val plus = Button(this).apply { text = "+"; isAllCaps = false; minWidth = 40; setOnClickListener { bar.progress = (bar.progress + 5).coerceAtMost(bar.max) } }
         fun update() { val amount = bar.progress + min; value.text = amount.toString() + "%"; prefs.edit().putInt(key, amount).apply(); applyVoiceParameters() }
         bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -157,6 +167,67 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         row.addView(titleView); row.addView(minus); row.addView(bar); row.addView(plus); row.addView(value)
         update()
         return row
+    }
+
+    private fun expressionPanel(): View {
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(14, 14, 14, 14)
+            background = GradientDrawable().apply { setColor(0xFF14243A.toInt()); cornerRadius = 24f; setStroke(1, 0xFF31577C.toInt()) }
+        }
+        panel.addView(label("EXPRESIÓN DE VOZ", 16, 0xFF78CFFF.toInt()))
+        expressionSummary = label("Estilo: " + (getSharedPreferences("voiceclone", MODE_PRIVATE).getString("voice_expression", "Locutor") ?: "Locutor"), 12, 0xFF78D6B0.toInt())
+        panel.addView(expressionSummary); panel.addView(space(8))
+        val rows = listOf(
+            listOf(Triple("🎙️  Locutor", "Locutor", 0xFF075B9E.toInt()), Triple("📖  Narrador", "Narrador", 0xFF42318D.toInt())),
+            listOf(Triple("😢  Triste", "Triste", 0xFF245078.toInt()), Triple("🎉  Entusiasta", "Entusiasta", 0xFF087A55.toInt())),
+            listOf(Triple("😠  Enfadado", "Enfadado", 0xFF9C3027.toInt()), Triple("🏰  Narrador de cuentos", "Narrador de cuentos", 0xFF8A650D.toInt())),
+            listOf(Triple("🤫  Susurro", "Susurro", 0xFF087C83.toInt()))
+        )
+        rows.forEach { items ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            items.forEach { item ->
+                val button = expressionButton(item.first, item.second, item.third)
+                row.addView(button, LinearLayout.LayoutParams(0, 54, 1f).apply { rightMargin = 5; leftMargin = 5; bottomMargin = 8 })
+            }
+            if (items.size == 1) row.addView(View(this), LinearLayout.LayoutParams(0, 54, 1f))
+            panel.addView(row)
+        }
+        refreshExpressionButtons()
+        panel.addView(label("Los estilos ajustan velocidad y tono. El resultado emocional depende de las capacidades de la voz instalada.", 11, 0xFFAAA5B1.toInt()))
+        return panel
+    }
+
+    private fun expressionButton(title: String, expression: String, color: Int): Button {
+        val button = Button(this).apply {
+            text = title; isAllCaps = false; textSize = 12f; setTextColor(0xFFFFFFFF.toInt())
+            minHeight = 48; setPadding(4, 4, 4, 4); setOnClickListener { applyExpressionPreset(expression) }
+        }
+        expressionButtons.add(button to expression); button.tag = color; return button
+    }
+
+    private fun refreshExpressionButtons() {
+        val selected = getSharedPreferences("voiceclone", MODE_PRIVATE).getString("voice_expression", "Locutor") ?: "Locutor"
+        expressionButtons.forEach { (button, name) ->
+            val color = if (name == selected) 0xFF0878C8.toInt() else (button.tag as? Int ?: 0xFF1A2A3D.toInt())
+            button.background = GradientDrawable().apply {
+                setColor(color); cornerRadius = 18f
+                setStroke(if (name == selected) 3 else 1, if (name == selected) 0xFF43D7FF.toInt() else 0xFF38516E.toInt())
+            }
+        }
+        if (::expressionSummary.isInitialized) expressionSummary.text = "Estilo seleccionado: " + selected
+    }
+
+    private fun applyExpressionPreset(name: String) {
+        val values = when (name) {
+            "Narrador" -> 92 to 100; "Triste" -> 82 to 88; "Entusiasta" -> 112 to 112
+            "Enfadado" -> 108 to 92; "Narrador de cuentos" -> 90 to 106; "Susurro" -> 82 to 86
+            else -> 98 to 98
+        }
+        getSharedPreferences("voiceclone", MODE_PRIVATE).edit().putString("voice_expression", name)
+            .putInt("speech_rate", values.first).putInt("speech_pitch", values.second).apply()
+        rateSeekBar?.progress = values.first - 50; pitchSeekBar?.progress = values.second - 50
+        applyVoiceParameters(); refreshExpressionButtons()
+        status.text = "Estilo " + name + " aplicado. La emoción exacta depende del motor TTS y de la voz seleccionada."
     }
 
     private fun applyVoiceParameters() {
@@ -230,8 +301,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                             pendingWavUri = null
                             pendingWavTemp = null
                         }
-                    } else {
-                        runOnUiThread { status.text = "Audio terminado." }
+                    } else if (utteranceId == "voiceclone-preview-last") {
+                        runOnUiThread { status.text = "Lectura completada sin cortar las frases." }
                     }
                 }
                 @Deprecated("Deprecated in Java")
@@ -273,14 +344,42 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         return true
     }
 
+    private fun splitTextForSpeech(source: String, maxChunk: Int = 220): List<String> {
+        val sentences = source.trim().split(Regex("(?<=[.!?;:])\\s+")).filter { it.isNotBlank() }
+        val result = mutableListOf<String>(); var current = StringBuilder()
+        fun flush() { if (current.isNotEmpty()) { result.add(current.toString().trim()); current = StringBuilder() } }
+        sentences.forEach { sentence ->
+            if (sentence.length <= maxChunk) {
+                if (current.isNotEmpty() && current.length + sentence.length + 1 > maxChunk) flush()
+                if (current.isNotEmpty()) current.append(" "); current.append(sentence)
+            } else {
+                flush(); var remaining = sentence
+                while (remaining.length > maxChunk) {
+                    var cut = remaining.lastIndexOf(' ', maxChunk); if (cut < maxChunk / 2) cut = maxChunk
+                    result.add(remaining.substring(0, cut).trim()); remaining = remaining.substring(cut).trimStart()
+                }
+                if (remaining.isNotEmpty()) current.append(remaining)
+            }
+        }
+        flush(); return result
+    }
+
     private fun speakText() {
-        val text = textInput.text.toString().trim()
-        if (text.isEmpty()) return toast("Escribe primero el texto.")
+        val source = textInput.text.toString().trim()
+        if (source.isEmpty()) return toast("Escribe primero el texto.")
+        if (source.length > maxCharacters) return toast("El texto no puede superar 3.000 caracteres.")
         if (!applySelectedVoice()) return
-        val result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "voiceclone-preview")
-        if (result == TextToSpeech.ERROR) {
-            status.text = "El motor rechazó la generación con la voz seleccionada."
-            toast("No se pudo generar con esa voz. Comprueba que esté cargada en Pocket TTS.")
+        val chunks = splitTextForSpeech(source)
+        if (chunks.isEmpty()) return toast("No se encontró texto para leer.")
+        status.text = "Leyendo " + chunks.size + " fragmentos consecutivos, conservando la puntuación…"
+        chunks.forEachIndexed { index, chunk ->
+            val mode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+            val id = if (index == chunks.lastIndex) "voiceclone-preview-last" else "voiceclone-preview-" + index
+            val result = tts.speak(chunk, mode, null, id)
+            if (result == TextToSpeech.ERROR) {
+                tts.stop(); status.text = "El motor detuvo la lectura en el fragmento " + (index + 1) + ". Comprueba la voz instalada."
+                toast("El motor no pudo continuar la lectura."); return
+            }
         }
     }
 
