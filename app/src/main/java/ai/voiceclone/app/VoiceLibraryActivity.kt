@@ -305,13 +305,38 @@ class VoiceLibraryActivity : Activity() {
     private fun delete(profile: Profile) {
         AlertDialog.Builder(this)
             .setTitle("Eliminar ${profile.name}")
-            .setMessage("Se eliminará esta referencia guardada en VOICE CLONE AI. La copia que tengas en Pocket TTS no se eliminará.")
+            .setMessage("Se borrará únicamente la copia y el registro guardados dentro de CLON AI PRO. El audio original de Android y cualquier archivo de Pocket TTS permanecerán intactos.")
             .setNegativeButton("Cancelar", null)
             .setPositiveButton("Eliminar") { _, _ ->
-                File(profile.audioPath).delete()
-                profiles.removeAll { it.id == profile.id }
-                saveProfiles()
-                renderProfiles()
+                try {
+                    val libraryDir = File(filesDir, "voice_library").canonicalFile
+                    val storedFile = File(profile.audioPath).canonicalFile
+                    if (storedFile.parentFile != libraryDir) {
+                        throw SecurityException("La ruta no pertenece al almacenamiento privado de la biblioteca.")
+                    }
+                    if (storedFile.exists() && !storedFile.delete()) {
+                        throw IllegalStateException("Android no permitió borrar la copia interna.")
+                    }
+
+                    // Elimina también la selección persistente para impedir que reaparezca
+                    // una voz antigua al registrar o seleccionar una referencia nueva.
+                    val prefs = getSharedPreferences("voiceclone", MODE_PRIVATE)
+                    if (prefs.getString("selected_profile_id", null) == profile.id) {
+                        prefs.edit()
+                            .remove("selected_tts_voice")
+                            .remove("selected_profile_name")
+                            .remove("selected_profile_id")
+                            .commit()
+                    }
+
+                    profiles.removeAll { it.id == profile.id }
+                    saveProfiles()
+                    renderProfiles()
+                    status.text = "Referencia eliminada de CLON AI PRO. Los originales de Android no se modificaron."
+                    toast("Voz eliminada de la aplicación. El audio original de Android sigue intacto.")
+                } catch (e: Exception) {
+                    toast("No se pudo eliminar la voz: ${e.message}")
+                }
             }
             .show()
     }
@@ -454,14 +479,34 @@ class VoiceLibraryActivity : Activity() {
         val raw = getSharedPreferences("voice_library", MODE_PRIVATE).getString("profiles", "[]") ?: "[]"
         runCatching {
             val array = JSONArray(raw)
+            val libraryDir = File(filesDir, "voice_library").canonicalFile
             for (i in 0 until array.length()) {
                 val item = array.getJSONObject(i)
                 val path = item.optString("audioPath")
-                if (File(path).exists()) profiles.add(Profile(
-                    item.optString("id"), item.optString("name"), path, item.optString("engineVoiceId")
-                ))
+                val file = File(path)
+                val isPrivateLibraryFile = runCatching {
+                    file.canonicalFile.parentFile == libraryDir
+                }.getOrDefault(false)
+                if (isPrivateLibraryFile && file.isFile && file.length() > 0L) {
+                    profiles.add(Profile(
+                        item.optString("id"), item.optString("name"), file.absolutePath,
+                        item.optString("engineVoiceId")
+                    ))
+                }
             }
         }
+        // Repara selecciones antiguas o huérfanas que quedaron guardadas tras borrar una voz.
+        val prefs = getSharedPreferences("voiceclone", MODE_PRIVATE)
+        val selectedId = prefs.getString("selected_profile_id", null)
+        if (!selectedId.isNullOrBlank() && profiles.none { it.id == selectedId }) {
+            prefs.edit()
+                .remove("selected_tts_voice")
+                .remove("selected_profile_name")
+                .remove("selected_profile_id")
+                .commit()
+        }
+        // Normaliza el índice para que no conserve metadatos de archivos ya eliminados.
+        saveProfiles()
     }
 
     private fun saveProfiles() {
